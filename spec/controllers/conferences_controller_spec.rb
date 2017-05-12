@@ -26,6 +26,8 @@ describe ConferencesController do
     course_with_teacher(active_all: true, user: user_with_pseudonym(active_all: true))
     @inactive_student = course_with_user('StudentEnrollment', course: @course, enrollment_state: 'invited').user
     student_in_course(active_all: true, user: user_with_pseudonym(active_all: true))
+
+    @random_student = User.create(:name => "not_in_course")
   end
 
   before :each do
@@ -39,6 +41,14 @@ describe ConferencesController do
       assert_unauthorized
     end
 
+    it "should require permission" do
+      user_session(@random_student)
+      @course.update_attribute(:settings, :is_public_to_auth_users=>false)
+      @course.update_attribute(:settings, :is_public=>false)
+      get 'index', :course_id => @course.id
+      expect(response).to render_template("shared/unauthorized")
+    end
+
     it "should redirect 'disabled', if disabled by the teacher" do
       user_session(@student)
       @course.update_attribute(:tab_configuration, [{'id'=>12,'hidden'=>true}])
@@ -47,10 +57,53 @@ describe ConferencesController do
       expect(flash[:notice]).to match(/That page has been disabled/)
     end
 
+    it "should not permit student view student" do
+      @student_view_student = @course.student_view_student
+      user_session(@student_view_student)
+      get 'index', :course_id => @course.id
+      expect(response).to render_template("shared/unauthorized")
+    end
+
     it "should assign variables" do
       user_session(@student)
       get 'index', :course_id => @course.id
       expect(response).to be_success
+    end
+
+    it "should list all conferences for teachers" do
+      user_session(@teacher)
+      @conferences = (0..2).map { |i| @course.web_conferences.create!(:title => "Conf #{i}",
+      :duration => 60,
+      :conference_type => 'Wimba',
+      :user =>  @teacher)}
+
+      @ended_conference = @course.web_conferences.create!(:title => "Ended",
+      :duration => 5,
+      :conference_type => 'Wimba',
+      :user => @teacher,
+      :ended_at => Time.now)
+      get 'index', :course_id => @course.id
+      expect(assigns[:new_conferences].count).to eq 3
+      expect(assigns[:concluded_conferences].count).to eq 1
+    end
+
+    it "should list all invited conferences for students" do
+      user_session(@student)
+      @conferences = (0..2).map { |i| @course.web_conferences.create!(:title => "Conf #{i}",
+      :duration => 60,
+      :conference_type => 'Wimba',
+      :user => @teacher)}
+
+      @ended_conference = @course.web_conferences.create!(:title => "Ended",
+      :duration => 5,
+      :conference_type => 'Wimba',
+      :user => @teacher,
+      :ended_at => Time.now)
+      @conferences[0].users <<  @student
+      @ended_conference.users << @student
+      get 'index', :course_id => @course.id
+      expect(assigns[:new_conferences].count).to eq 1
+      expect(assigns[:concluded_conferences].count).to eq 1
     end
 
     it "should not redirect from group context" do
@@ -105,13 +158,26 @@ describe ConferencesController do
       assert_unauthorized
     end
 
+    it "should require permission" do
+      user_session(@random_student)
+      post 'create', :course_id => @course.id, :web_conference => {:title => "My Conference", :conference_type => "Wimba"}
+      expect(response).to render_template("shared/unauthorized")
+    end
+
     it "should create a conference" do
       user_session(@teacher)
       post 'create', :course_id => @course.id, :web_conference => {:title => "My Conference", :conference_type => 'Wimba'}, :format => 'json'
       expect(response).to be_success
     end
 
-    context 'with concluded students in context' do
+    it "should not invite inactive student" do
+      user_session(@teacher)
+      post 'create', :course_id => @course.id, :web_conference => {:title => "My Conference", :conference_type => 'Wimba'}, :format => 'json'
+      conference = WebConference.last
+      expect(conference.invitees).not_to include(@inactive_student)
+    end
+
+    context "with concluded students in context" do
       context "with a course context" do
         it 'should not invite students with a concluded enrollment' do
           user_session(@teacher)
@@ -123,8 +189,8 @@ describe ConferencesController do
         end
       end
 
-      context 'with a group context' do
-        it 'should not invite students with a concluded enrollment' do
+      context "with a group context" do
+        it "should not invite students with a concluded enrollment" do
           user_session(@teacher)
           concluded_enrollment = student_in_course(active_all: true, user: user_with_pseudonym(active_all: true))
           concluded_enrollment.conclude
@@ -145,14 +211,24 @@ describe ConferencesController do
   end
 
   describe "POST 'update'" do
+
+    before :each do
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :user => @teacher)
+    end
+
     it "should require authorization" do
-      post 'create', :course_id => @course.id, :web_conference => {:title => "My Conference", :conference_type => 'Wimba'}
+      post 'update', :course_id => @course.id, :id => @conference, :web_conference => {:title => "My Conference", :conference_type => 'Wimba'}, :format => 'json'
       assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      post 'update', :course_id => @course.id, :id => @conference, :web_conference => {:title => "My Conference", :conference_type => 'Wimba'}
+      expect(response).to render_template("shared/unauthorized")
     end
 
     it "should update a conference" do
       user_session(@teacher)
-      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :user => @teacher)
       post 'update', :course_id => @course.id, :id => @conference, :web_conference => {:title => "Something else"}, :format => 'json'
       expect(response).to be_success
     end
@@ -163,6 +239,25 @@ describe ConferencesController do
       @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
       post 'join', :course_id => @course.id, :conference_id => @conference.id
       assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+      post 'join', :course_id => @course.id, :conference_id => @conference.id
+      expect(response).to render_template("shared/unauthorized")
+    end
+
+    it "should not allow join into a disabled conference type" do
+      user_session(@teacher)
+      plugin = PluginSetting.create!(name: 'adobe_connect')
+      plugin.update_attribute(:settings, { :domain => 'adobe_connect.test'})
+      @conference = @course.web_conferences.create!(:conference_type => 'AdobeConnect', :duration => 60, :user => @teacher)
+      plugin.disabled = true
+      plugin.save!
+      post 'join', :course_id => @course.id, :conference_id => @conference.id
+      expect(response).to be_redirect
+      expect(flash[:error]).to match /This type of conference is no longer enabled for this Canvas site/
     end
 
     it "should let admins join a conference" do
@@ -178,13 +273,13 @@ describe ConferencesController do
       @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :user => @teacher)
       @conference.update_attribute :start_at, 1.month.ago
       @conference.users << @student
-      WimbaConference.any_instance.stubs(:conference_status).returns(:closed)
+      WebConference.any_instance.stubs(:conference_status).returns(:closed)
       post 'join', :course_id => @course.id, :conference_id => @conference.id
       expect(response).to be_redirect
       expect(response['Location']).to match /wimba\.test/
     end
 
-    describe 'when student is part of the conference' do
+    context "when student is part of the conference" do
 
       before :once do
         @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
@@ -196,17 +291,17 @@ describe ConferencesController do
       end
 
       it "should not let students join an inactive conference" do
-        WimbaConference.any_instance.expects(:active?).returns(false)
+        WebConference.any_instance.expects(:active?).returns(false)
         post 'join', :course_id => @course.id, :conference_id => @conference.id
         expect(response).to be_redirect
         expect(response['Location']).not_to match /wimba\.test/
         expect(flash[:notice]).to match(/That conference is not currently active/)
       end
 
-      describe 'when the conference is active' do
+      context "when the conference is active" do
         before do
           Setting.set('enable_page_views', 'db')
-          WimbaConference.any_instance.expects(:active?).returns(true)
+          WebConference.any_instance.expects(:active?).returns(true)
           post 'join', :course_id => @course.id, :conference_id => @conference.id
         end
 
@@ -230,6 +325,193 @@ describe ConferencesController do
           expect(page_view.participated).to be_truthy
         end
       end
+    end
+  end
+
+  describe "POST 'close'" do
+
+    before :each do
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+    end
+
+    it "should require authorization" do
+      post 'close', :course_id => @course.id, :conference_id => @conference.id
+      assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      post 'close', :course_id => @course.id, :conference_id => @conference.id
+      expect(response).to render_template("shared/unauthorized")
+    end
+
+    it "should close a conference" do
+      user_session(@teacher)
+      post 'close', :course_id => @course.id, :conference_id => @conference.id
+      expect(response).to be_success
+    end
+
+    it "should allow admins to close all conferences" do
+      user_session(@teacher)
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @student)
+      post 'close', :course_id => @course.id, :conference_id => @conference.id
+      expect(response).to be_success
+    end
+
+    it "should not allow conferences which have not started to be closed" do
+      user_session(@teacher)
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+      @conference.settings['active'] =  false
+      post 'close', :course_id => @course.id, :conference_id => @conference.id
+      expect(JSON.parse(response.body)['message']).to match /conference is not active/
+    end
+  end
+
+  describe "GET 'settings'" do
+
+    before :each do
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+    end
+
+    it "should require authorization" do
+      get 'settings', :course_id => @course.id, :conference_id => @conference.id
+      assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      get 'settings', :course_id => @course.id, :conference_id => @conference.id
+      expect(response).to render_template("shared/unauthorized")
+    end
+
+    it "should redirect to advanced settings page" do
+      user_session(@teacher)
+      get 'settings', :course_id => @course.id, :conference_id => @conference.id
+      expect(response).to be_redirect
+    end
+
+    it "should redirect if no advanced settings" do
+      user_session(@teacher)
+      WebConference.any_instance.stubs(:has_advanced_settings?).returns(false)
+      get 'settings', :course_id => @course.id, :conference_id => @conference.id
+      expect(response).to be_redirect
+      expect(flash[:error]).to match /The conference does not have an advanced settings page/
+    end
+  end
+
+  describe "DELETE 'destroy'" do
+
+    before :each do
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+    end
+
+    it "should require authorization" do
+      delete 'destroy', :course_id => @course.id, :id => @conference.id, :format => 'json'
+      assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      delete 'destroy', :course_id => @course.id, :id => @conference.id
+      expect(response).to render_template("shared/unauthorized")
+    end
+
+    it "should delete conference" do
+      user_session(@teacher)
+      delete 'destroy', :course_id => @course.id, :id => @conference.id
+      expect(response).to be_redirect
+    end
+  end
+
+  describe "POST 'get_recording'" do
+
+    before :each do
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+      # random invalid recording id
+      @record_id = 1
+    end
+
+    it "should require authorization" do
+      post 'get_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id
+      assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      post 'get_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id
+      expect(response).to render_template("shared/unauthorized")
+    end
+
+    it "should not get recording if recording was not enabled" do
+      user_session(@teacher)
+      @conference.settings['recording_enabled'] = false
+      post 'get_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id, :format => 'json'
+      expect(response.body).to be_empty
+    end
+
+    it "should not get recording if recording_id is invalid" do
+      random_id = -1
+      user_session(@teacher)
+      post 'get_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id, :format => 'json'
+      expect(response.body).to be_empty
+    end
+  end
+
+  describe "POST 'publish_recording'" do
+
+    before :each do
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+      # random invalid recording id
+      @record_id = 1
+    end
+
+    it "should require authorization" do
+      post 'publish_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id
+      assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      post 'publish_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id
+      expect(response).to render_template("shared/unauthorized")
+    end
+  end
+
+  describe "POST 'delete_recording'" do
+    before :each do
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+      # random invalid recording id
+      @record_id = 1
+    end
+
+    it "should require authorization" do
+      post 'delete_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id, :format => 'json'
+      assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      post 'delete_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id
+      expect(response).to render_template("shared/unauthorized")
+    end
+  end
+
+  describe "POST 'protect_recording'" do
+    before :each do
+      @conference = @course.web_conferences.create!(:conference_type => 'Wimba', :duration => 60, :user => @teacher)
+      # random invalid recording id
+      @record_id = 1
+    end
+
+    it "should require authorization" do
+      post 'protect_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id, :format => 'json'
+      assert_unauthorized
+    end
+
+    it "should require permission" do
+      user_session(@random_student)
+      post 'protect_recording', :course_id => @course.id, :conference_id => @conference.id, :recording_id => @record_id
+      expect(response).to render_template("shared/unauthorized")
     end
   end
 end
