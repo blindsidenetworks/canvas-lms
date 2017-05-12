@@ -73,15 +73,15 @@ describe ConferencesController do
     it "should list all conferences for teachers" do
       user_session(@teacher)
       @conferences = (0..2).map { |i| @course.web_conferences.create!(:title => "Conf #{i}",
-      :duration => 60,
-      :conference_type => 'Wimba',
-      :user =>  @teacher)}
+                                                                      :duration => 60,
+                                                                      :conference_type => 'Wimba',
+                                                                      :user =>  @teacher)}
 
       @ended_conference = @course.web_conferences.create!(:title => "Ended",
-      :duration => 5,
-      :conference_type => 'Wimba',
-      :user => @teacher,
-      :ended_at => Time.now)
+                                                          :duration => 5,
+                                                          :conference_type => 'Wimba',
+                                                          :user => @teacher,
+                                                          :ended_at => Time.now)
       get 'index', :course_id => @course.id
       expect(assigns[:new_conferences].count).to eq 3
       expect(assigns[:concluded_conferences].count).to eq 1
@@ -90,15 +90,15 @@ describe ConferencesController do
     it "should list all invited conferences for students" do
       user_session(@student)
       @conferences = (0..2).map { |i| @course.web_conferences.create!(:title => "Conf #{i}",
-      :duration => 60,
-      :conference_type => 'Wimba',
-      :user => @teacher)}
+                                                                      :duration => 60,
+                                                                      :conference_type => 'Wimba',
+                                                                      :user => @teacher)}
 
       @ended_conference = @course.web_conferences.create!(:title => "Ended",
-      :duration => 5,
-      :conference_type => 'Wimba',
-      :user => @teacher,
-      :ended_at => Time.now)
+                                                          :duration => 5,
+                                                          :conference_type => 'Wimba',
+                                                          :user => @teacher,
+                                                          :ended_at => Time.now)
       @conferences[0].users <<  @student
       @ended_conference.users << @student
       get 'index', :course_id => @course.id
@@ -179,7 +179,7 @@ describe ConferencesController do
 
     context "with concluded students in context" do
       context "with a course context" do
-        it 'should not invite students with a concluded enrollment' do
+        it "should not invite students with a concluded enrollment" do
           user_session(@teacher)
           enrollment = student_in_course(active_all: true, user: user_with_pseudonym(active_all: true))
           enrollment.conclude
@@ -196,12 +196,12 @@ describe ConferencesController do
           concluded_enrollment.conclude
 
           enrollment = student_in_course(active_all: true, user: user_with_pseudonym(active_all: true))
-          group_category = @course.group_categories.create(:name => "category 1")
-          group = @course.groups.create(:name => "some group", :group_category => group_category)
+          group_category = @course.group_categories.create(:name => 'category 1')
+          group = @course.groups.create(:name => 'some group', :group_category => group_category)
           group.add_user enrollment.user, 'accepted'
           group.add_user concluded_enrollment.user, 'accepted'
 
-          post 'create', :group_id => group.id, :web_conference => {:title => "My Conference", :conference_type => 'Wimba'}, :format => 'json'
+          post 'create', :group_id => group.id, :web_conference => {:title => 'My Conference', :conference_type => 'Wimba'}, :format => 'json'
           conference = WebConference.last
           expect(conference.invitees).not_to include(concluded_enrollment.user)
           expect(conference.invitees).to include(enrollment.user)
@@ -310,17 +310,17 @@ describe ConferencesController do
           expect(response['Location']).to match /wimba\.test/
         end
 
-        it 'logs an asset access record for the discussion topic' do
+        it "logs an asset access record for the discussion topic" do
           accessed_asset = assigns[:accessed_asset]
           expect(accessed_asset[:code]).to eq @conference.asset_string
-          expect(accessed_asset[:category]).to eq 'conferences'
-          expect(accessed_asset[:level]).to eq 'participate'
+          expect(accessed_asset[:category]).to eq "conferences"
+          expect(accessed_asset[:level]).to eq "participate"
         end
 
-        it 'registers a page view' do
+        it "registers a page view" do
           page_view = assigns[:page_view]
           expect(page_view).not_to be_nil
-          expect(page_view.http_method).to eq 'post'
+          expect(page_view.http_method).to eq "post"
           expect(page_view.url).to match %r{^http://test\.host/courses/\d+/conferences/\d+/join}
           expect(page_view.participated).to be_truthy
         end
