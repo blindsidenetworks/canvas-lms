@@ -164,6 +164,8 @@ CanvasRails::Application.routes.draw do
     resources :conferences do
       match :join, via: [:get, :post]
       match :close, via: [:get, :post]
+      match :recording, via: [:get, :post]
+      match :delete_recording, via: [:get, :post]
       get :settings
     end
   end

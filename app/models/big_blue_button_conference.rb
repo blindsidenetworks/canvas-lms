@@ -87,19 +87,39 @@ class BigBlueButtonConference < WebConference
 
   def recordings
     fetch_recordings.map do |recording|
-      recording_format = recording.fetch(:playback, {}).fetch(:format, {})
-      {
-        recording_id:     recording[:recordID],
-        duration_minutes: recording_format[:length].to_i,
-        playback_url:     recording_format[:url],
-      }
+      recording_format(recording)
     end
+  end
+
+  def recording(recording_id = nil)
+    unless recording_id.nil?
+      recording = fetch_recordings.find{ |r| r[:recordID]==recording_id }
+      recording_format(recording) if recording
+    end
+  end
+
+  def recording_format(recording)
+    recording_format = recording.fetch(:playback, {}).fetch(:format, {})
+    {
+      vendor:           "big_blue_button",
+      recording_id:     recording[:recordID],
+      duration_minutes: recording_format[:length].to_i,
+      playback_url:     recording_format[:url],
+      ended_at:         recording[:endTime].to_i,
+    }
   end
 
   def delete_all_recordings
     fetch_recordings.map do |recording|
       delete_recording recording[:recordID]
     end
+  end
+
+  def delete_recording(recording_id)
+    response = send_request(:deleteRecordings, {
+      :recordID => recording_id,
+      })
+    {:deleted => response ? response[:deleted] : false}
   end
 
   def close
@@ -147,13 +167,6 @@ class BigBlueButtonConference < WebConference
     result = response[:recordings] if response
     result = [] if result.is_a?(String)
     Array(result)
-  end
-
-  def delete_recording(recording_id)
-    response = send_request(:deleteRecordings, {
-      :recordID => recording_id,
-      })
-    response[:deleted] if response
   end
 
   def generate_request(action, options)

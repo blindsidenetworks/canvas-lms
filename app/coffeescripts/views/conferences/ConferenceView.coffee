@@ -20,9 +20,10 @@ define [
   'jquery'
   'Backbone'
   'jst/conferences/newConference'
+  'str/htmlEscape'
   'jquery.google-analytics'
   'compiled/jquery.rails_flash_notifications'
-], (I18n, $, {View}, template) ->
+], (I18n, $, {View}, template, htmlEscape) ->
 
   class ConferenceView extends View
 
@@ -38,6 +39,7 @@ define [
       'click .close_conference_link': 'close'
       'click .start-button': 'start'
       'click .external_url': 'external'
+      'click .delete_recording_link': 'delete_recording'
 
     initialize: ->
       super
@@ -126,3 +128,63 @@ define [
         else
           window.open(data[0].url)
       )
+
+    delete_recording: (e) ->
+      return if !confirm(I18n.t('recordings.confirm.delete', "Are you sure you want to delete this recording?"))
+      e.preventDefault()
+      parent = $(e.currentTarget).parent()
+      params = {recording_id: parent.data("id")}
+      this.toggleActionButton(parent, {state: "processing", action: "delete"})
+      this.toggleRecordingLink(parent, {state: "processing"})
+      $.ajaxJSON(parent.data('url') + "/delete_recording", "POST", params,
+        (data) =>
+          if data.deleted
+            this.removeRecordingRow(parent)
+            return
+          this.ensure_delete_performed({attempt: 1, parent: parent, desired_state: "true"})
+      )
+
+    ensure_delete_performed: (payload) ->
+      $.ajaxJSON(payload.parent.data('url') + "/recording", "POST", {
+          recording_id: payload.parent.data("id"),
+        }, (data) =>
+          current_state = if $.isEmptyObject(data) then "true" else "false"
+          if current_state == payload.desired_state
+            this.removeRecordingRow(payload.parent)
+            return
+          if payload.attempt < 5
+            payload['attempt'] = payload['attempt'] + 1
+            setTimeout((=> this.ensure_delete_performed(payload); return;), payload.attempt * 1000)
+            return
+          $.flashError(I18n.t('conferences.recordings.action_error', "Sorry, the action performed on this recording failed. Try again later"))
+          this.toggleActionButton(payload.parent, {state: "processed", action: "delete"})
+          this.toggleRecordingLink(payload.parent, {state: "processed"})
+      )
+
+    toggleActionButton: (parent, data) ->
+      button = $('.ig-button[data-id="' + parent.data("id") + '"][data-action="' + data.action + '"]')
+      spinner = $('.ig-loader[data-id="' + parent.data("id") + '"][data-action="' + data.action + '"]')
+      if data.state == 'processing'
+        button.hide()
+        spinner.show()
+        return
+      spinner.hide()
+      button.show()
+
+    toggleRecordingLink: (parent, data) ->
+      link = $('a[data-id="' + parent.data("id") + '"]')
+      if data.state == 'processing'
+          link.bind 'click', ->
+            return false
+          return
+      link.unbind 'click'
+
+    removeRecordingRow: (parent) ->
+      row = $('.ig-row[data-id="' + parent.data("id") + '"]')
+      list = $(row.parent().parent())
+      if list.children().length == 1
+        container = $(list.parent())
+        container.remove()
+        return
+      list_element = $(row.parent())
+      list_element.remove()
