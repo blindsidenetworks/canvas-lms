@@ -103,6 +103,7 @@ class BigBlueButtonConference < WebConference
     {
       vendor:           "big_blue_button",
       recording_id:     recording[:recordID],
+      title:            recording[:name],
       duration_minutes: recording_format[:length].to_i,
       playback_url:     recording_format[:url],
       ended_at:         recording[:endTime].to_i,

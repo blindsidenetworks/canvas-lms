@@ -58,7 +58,7 @@ define [
         allCogs = $('#content .al-trigger').toArray()
         # Find the preceeding cog
         curIndex = allCogs.indexOf(currentCog)
-        if (curIndex > 0)
+        if curIndex > 0
           allCogs[curIndex - 1].focus()
         else
           $('.new-conference-btn').focus()
@@ -101,15 +101,15 @@ define [
       loading_text = I18n.t('loading_urls_message', "Loading, please wait...")
       $self = $(e.currentTarget)
       link_text = $self.text()
-      if (link_text == loading_text)
+      if link_text == loading_text
         return
 
       $self.text(loading_text)
       $.ajaxJSON($self.attr('href'), 'GET', {}, (data) ->
         $self.text(link_text)
-        if (data.length == 0)
+        if data.length == 0
           $.flashError(I18n.t('no_urls_error', "Sorry, it looks like there aren't any %{type} pages for this conference yet.", {type: $self.attr('name')}))
-        else if (data.length > 1)
+        else if data.length > 1
           $box = $(document.createElement('DIV'))
           $box.append($("<p />").text(I18n.t('multiple_urls_message', "There are multiple %{type} pages available for this conference. Please select one:", {type: $self.attr('name')})))
           for datum in data
@@ -132,38 +132,37 @@ define [
     delete_recording: (e) ->
       return if !confirm(I18n.t('recordings.confirm.delete', "Are you sure you want to delete this recording?"))
       e.preventDefault()
-      parent = $(e.currentTarget).parent()
-      params = {recording_id: parent.data("id")}
-      this.toggleActionButton(parent, {state: "processing", action: "delete"})
-      this.toggleRecordingLink(parent, {state: "processing"})
-      $.ajaxJSON(parent.data('url') + "/delete_recording", "POST", params,
+      $parent = $(e.currentTarget).parent()
+      params = {recording_id: $parent.data("id")}
+      this.toggleActionButton($parent, {state: "processing", action: "delete"})
+      this.toggleRecordingLink($parent, {state: "processing"})
+      $.ajaxJSON($parent.data('url') + "/delete_recording", "POST", params,
         (data) =>
           if data.deleted
-            this.removeRecordingRow(parent)
+            this.removeRecordingRow($parent)
             return
-          this.ensure_delete_performed({attempt: 1, parent: parent, desired_state: "true"})
+          this.ensure_delete_performed($parent)
       )
 
-    ensure_delete_performed: (payload) ->
-      $.ajaxJSON(payload.parent.data('url') + "/recording", "POST", {
-          recording_id: payload.parent.data("id"),
+    ensure_delete_performed: ($parent, attempt = 1) ->
+      $.ajaxJSON($parent.data('url') + "/recording", "POST", {
+          recording_id: $parent.data("id"),
         }, (data) =>
-          current_state = if $.isEmptyObject(data) then "true" else "false"
-          if current_state == payload.desired_state
-            this.removeRecordingRow(payload.parent)
+          if $.isEmptyObject(data)
+            this.removeRecordingRow($parent)
             return
-          if payload.attempt < 5
-            payload['attempt'] = payload['attempt'] + 1
-            setTimeout((=> this.ensure_delete_performed(payload); return;), payload.attempt * 1000)
+          if attempt < 5
+            attempt += 1
+            setTimeout((=> this.ensure_delete_performed($parent, attempt); return;), attempt * 1000)
             return
           $.flashError(I18n.t('conferences.recordings.action_error', "Sorry, the action performed on this recording failed. Try again later"))
-          this.toggleActionButton(payload.parent, {state: "processed", action: "delete"})
-          this.toggleRecordingLink(payload.parent, {state: "processed"})
+          this.toggleActionButton($parent, {state: "processed", action: "delete"})
+          this.toggleRecordingLink($parent, {state: "processed"})
       )
 
-    toggleActionButton: (parent, data) ->
-      button = $('.ig-button[data-id="' + parent.data("id") + '"][data-action="' + data.action + '"]')
-      spinner = $('.ig-loader[data-id="' + parent.data("id") + '"][data-action="' + data.action + '"]')
+    toggleActionButton: ($parent, data) ->
+      button = $('.ig-button[data-id="' + $parent.data("id") + '"][data-action="' + data.action + '"]')
+      spinner = $('.ig-loader[data-id="' + $parent.data("id") + '"][data-action="' + data.action + '"]')
       if data.state == 'processing'
         button.hide()
         spinner.show()
@@ -171,16 +170,16 @@ define [
       spinner.hide()
       button.show()
 
-    toggleRecordingLink: (parent, data) ->
-      link = $('a[data-id="' + parent.data("id") + '"]')
+    toggleRecordingLink: ($parent, data) ->
+      link = $('a[data-id="' + $parent.data("id") + '"]')
       if data.state == 'processing'
           link.bind 'click', ->
             return false
           return
       link.unbind 'click'
 
-    removeRecordingRow: (parent) ->
-      row = $('.ig-row[data-id="' + parent.data("id") + '"]')
+    removeRecordingRow: ($parent) ->
+      row = $('.ig-row[data-id="' + $parent.data("id") + '"]')
       list = $(row.parent().parent())
       if list.children().length == 1
         container = $(list.parent())

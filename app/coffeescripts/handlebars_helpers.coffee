@@ -147,12 +147,11 @@ define [
     durationToString : (minutes) ->
       hours = Math.floor(minutes / 60)
       real_minutes = minutes % 60
-      str = I18n.t('edit_conference_form.duration', 'Duration')+": "
-      if minutes>=60
-        return str+I18n.t('quiz_statistics.duration_in_hours_and_minutes', "%{hours} and %{minutes}", {hours: hours, minutes: real_minutes})
-      if minutes>1
-        return str+I18n.t('quiz_statistics.duration_in_minutes.other', "%{count} minutes", {count: real_minutes})
-      return str+I18n.t('quiz_statistics.duration_in_minutes.one', "1 minute")
+      if minutes >= 60
+        return I18n.t("Duration: %{hours} and %{minutes}", {hours: hours, minutes: real_minutes})
+      if minutes > 1
+        return I18n.t("Duration: %{count} minutes", {count: real_minutes})
+      return I18n.t("Duration: 1 minute")
 
     # helper for easily creating icon font markup
     addIcon : (icontype) ->

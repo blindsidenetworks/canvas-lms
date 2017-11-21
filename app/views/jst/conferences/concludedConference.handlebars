@@ -25,7 +25,7 @@
         {{#if recording}}
           <div class="ig-details__item">
             {{#if multipleRecordings}}
-              <div>{{recordingCount}}&nbsp;{{#t "recordings"}}Recordings{{/t}}</div>
+              {{#t "recordings"}}{{recordingCount}} Recordings{{/t}}
             {{else}}
               <div>1&nbsp;{{#t "recording"}}Recording{{/t}}</div>
             {{/if}}
@@ -68,7 +68,7 @@
                     <div class="ig-details">
                       <a href="{{playback_url}}" target="_blank" class="ig-title"
                         style="line-height: inherit;" data-id="{{recording_id}}" data-format="presentation">
-                        {{#t "recording"}}Recording{{/t}}
+                        {{title}}
                       </a>
                       {{dateString ended_at}}
                       &#124;&nbsp;
